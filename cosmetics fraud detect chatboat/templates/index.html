@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fraud Detection Chatbot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      <div class="header-content">
+        <div class="header-icon">🛡️</div>
+        <div>
+          <h1>Fraud Detection Chatbot</h1>
+          <p class="subtitle">AI-Powered Cosmetics Transaction Analysis</p>
+        </div>
+      </div>
+    </div>
+    
+    <div id="chat-box" class="chat-box">
+      <div class="welcome-message">
+        <div class="welcome-icon">👋</div>
+        <div class="welcome-text">
+          <h3>Welcome to Fraud Detection Assistant</h3>
+          <p>Ask me about fraud patterns, transaction analysis, customer behavior, or any insights from the cosmetics fraud dataset.</p>
+          <div class="suggestions">
+            <div class="suggestion-chip" onclick="sendSuggestion('What are the common characteristics of fraudulent transactions?')">Common fraud patterns</div>
+            <div class="suggestion-chip" onclick="sendSuggestion('Which stores have the highest fraud rates?')">Store analysis</div>
+            <div class="suggestion-chip" onclick="sendSuggestion('What percentage of transactions are fraudulent?')">Fraud statistics</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="input-container">
+      <input 
+        type="text" 
+        id="user-input" 
+        placeholder="Ask about fraud analysis..." 
+        onkeypress="handleKeyPress(event)"
+      >
+      <button id="send-btn" onclick="sendMessage()" class="send-button">
+        <span class="send-icon">📤</span>
+        <span class="send-text">Send</span>
+      </button>
+      <button onclick="clearChat()" class="clear-button" title="Clear chat">
+        🗑️
+      </button>
+    </div>
+  </div>
+
+  <script>
+    function handleKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+      }
+    }
+
+    function sendSuggestion(text) {
+      document.getElementById("user-input").value = text;
+      sendMessage();
+    }
+
+    async function sendMessage() {
+      let input = document.getElementById("user-input");
+      let message = input.value.trim();
+      if (!message) return;
+
+      let chatBox = document.getElementById("chat-box");
+      let sendBtn = document.getElementById("send-btn");
+      
+      // Remove welcome message if it exists
+      let welcomeMsg = chatBox.querySelector('.welcome-message');
+      if (welcomeMsg) {
+        welcomeMsg.remove();
+      }
+
+      // Add user message
+      let userMsgDiv = document.createElement('div');
+      userMsgDiv.className = 'message user-message';
+      userMsgDiv.innerHTML = `
+        <div class="message-content">
+          <div class="message-text">${escapeHtml(message)}</div>
+          <div class="message-time">${getCurrentTime()}</div>
+        </div>
+        <div class="message-avatar">👤</div>
+      `;
+      chatBox.appendChild(userMsgDiv);
+      
+      // Clear input and disable button
+      input.value = "";
+      sendBtn.disabled = true;
+      sendBtn.innerHTML = '<span class="loading">⏳</span>';
+
+      // Scroll to bottom
+      chatBox.scrollTop = chatBox.scrollHeight;
+
+      try {
+        let response = await fetch("/chat", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({message: message})
+        });
+        let data = await response.json();
+        
+        // Add bot message
+        let botMsgDiv = document.createElement('div');
+        botMsgDiv.className = 'message bot-message';
+        botMsgDiv.innerHTML = `
+          <div class="message-avatar">🤖</div>
+          <div class="message-content">
+            <div class="message-text">${formatResponse(data.reply)}</div>
+            <div class="message-time">${getCurrentTime()}</div>
+          </div>
+        `;
+        chatBox.appendChild(botMsgDiv);
+        
+        // Scroll to bottom
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } catch (error) {
+        let errorMsgDiv = document.createElement('div');
+        errorMsgDiv.className = 'message bot-message error';
+        errorMsgDiv.innerHTML = `
+          <div class="message-avatar">⚠️</div>
+          <div class="message-content">
+            <div class="message-text">Sorry, an error occurred. Please try again.</div>
+            <div class="message-time">${getCurrentTime()}</div>
+          </div>
+        `;
+        chatBox.appendChild(errorMsgDiv);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<span class="send-icon">📤</span><span class="send-text">Send</span>';
+        input.focus();
+      }
+    }
+
+    async function clearChat() {
+      let response = await fetch("/clear", {method: "POST"});
+      let chatBox = document.getElementById("chat-box");
+      chatBox.innerHTML = `
+        <div class="welcome-message">
+          <div class="welcome-icon">👋</div>
+          <div class="welcome-text">
+            <h3>Welcome to Fraud Detection Assistant</h3>
+            <p>Ask me about fraud patterns, transaction analysis, customer behavior, or any insights from the cosmetics fraud dataset.</p>
+            <div class="suggestions">
+              <div class="suggestion-chip" onclick="sendSuggestion('What are the common characteristics of fraudulent transactions?')">Common fraud patterns</div>
+              <div class="suggestion-chip" onclick="sendSuggestion('Which stores have the highest fraud rates?')">Store analysis</div>
+              <div class="suggestion-chip" onclick="sendSuggestion('What percentage of transactions are fraudulent?')">Fraud statistics</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function formatResponse(text) {
+      // Escape HTML first
+      text = escapeHtml(text);
+      
+      // Remove markdown headers and convert to proper headings
+      text = text.replace(/^###\s+(.+)$/gm, '<h3 class="response-heading">$1</h3>');
+      text = text.replace(/^##\s+(.+)$/gm, '<h2 class="response-heading">$1</h2>');
+      text = text.replace(/^#\s+(.+)$/gm, '<h2 class="response-heading">$1</h2>');
+      
+      // Convert markdown-style formatting
+      text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+      text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+      
+      // Convert numbered lists
+      text = text.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+      text = text.replace(/(<li>.*<\/li>)/s, '<ol>$1</ol>');
+      
+      // Convert bullet points
+      text = text.replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>');
+      
+      // Convert line breaks
+      text = text.replace(/\n\n/g, '</p><p>');
+      text = text.replace(/\n/g, '<br>');
+      
+      // Wrap in paragraphs
+      if (!text.startsWith('<')) {
+        text = '<p>' + text + '</p>';
+      }
+      
+      return text;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function getCurrentTime() {
+      const now = new Date();
+      return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    }
+  </script>
+</body>
+</html>
